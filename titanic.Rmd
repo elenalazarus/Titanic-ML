@@ -202,7 +202,7 @@ Here I got that the estimates of every factor. So if you were old man in third c
 summary(mylogit)
 ```
 
-Now I am 
+Now I am doing partition of data to build a model based on first part of train data set and then fit it and define its accuracy by testing at the second part of train data set.
 ```{r}
 splitting <- createDataPartition(y=totrain$Survived, p=0.6, list=FALSE)
 training <- totrain[ splitting, ]
@@ -218,6 +218,7 @@ mod_fit <- train(as.factor(Survived) ~ Pclass + Female + Age + SibSp + Parch + F
 summary(mod_fit)
 ```
 
+Trying different methods for variable selection
 ```{r}
 exp(coef(mod_fit$finalModel))
 ```
@@ -226,7 +227,7 @@ exp(coef(mod_fit$finalModel))
 p <- predict(mod_fit, newdata=testing)
 ```
 
-
+Comparing two models
 ```{r}
 mod_fit_one <- glm(Survived ~ Pclass + Female + Age + SibSp + Parch + Fare + Embarked.C + Embarked.S, data=training, family="binomial")
 mod_fit_two <- glm(Survived ~ Pclass + Female + Age, data=training, family="binomial")
@@ -237,14 +238,14 @@ anova(mod_fit_one, mod_fit_two, test ="Chisq")
 varImp(mod_fit)
 ```
 
-
+Prediction at the second part of training data set, checking the accuracy
 ```{r}
 pred = predict(mod_fit, newdata=testing)
-pred
 
 confusionMatrix(table(data=pred, testing$Survived))
 ```
 
+Building random forest
 ```{r}
 
 training
@@ -266,6 +267,7 @@ Survived <- predict(mod_fit, newdata=totest)
 ForestSurvived <- predict(forest, newdata=totest)
 ```
 
+Preparing results for Kaggle
 ```{r}
 PassengerId <- totest$PassengerId
 output.df <- as.data.frame(PassengerId)
