@@ -1,0 +1,279 @@
+---
+title: "R Notebook"
+author: "Elena Lazarenko"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is my final project for Econometrics Course where I try to figure out who was more likely to survive than others when Titanic sinked. Project implemented by Machine Learning basics and different models for prediction.
+```{r}
+library(dplyr)
+library(ggplot2)
+library(dummies)
+library(ResourceSelection)
+library(RColorBrewer)
+library(rpart)
+library(caret)
+library(rpart.plot)
+library(survey)
+library("randomForest")
+```
+
+Here we have two datasets. One I will use for training my model which is called train.csv, and the other I will use to predict will each person survive or not according to different factors which is called test.csv.
+```{r}
+totrain = read.csv("/Users/zlatahayvoronska/Documents/UCU/second-year/econometrics/project/titanic/train.csv")
+totest = read.csv("/Users/zlatahayvoronska/Documents/UCU/second-year/econometrics/project/titanic/test.csv")
+```
+
+Let's have a look at our data. Every passenger is described by his/her Id, ticket class, sex, age in years, number of siblings/spouses aboard the Titanic, number of parents/children aboard the Titani, ticket number, passenger fare, cabin number, port of embarkation.
+```{r}
+totest
+```
+
+Now I will try to clean both datasets and filled missing values. In some places here is missed Embarked value and Age. I filled Embarked with "S" because mose passengers embarked there and used median age according to sex to fill missing age values.
+```{r}
+totrain[totrain$Embarked == "","Embarked"] <- "S"
+
+totrain.males <- totrain[totrain$Sex == "male",]
+
+totrain.male_median <- median(totrain.males$Age,na.rm = TRUE)
+
+totrain[is.na(totrain$Age)&totrain$Sex == 'male',
+             "Age"] <- totrain.male_median
+
+totrain.females <- totrain[totrain$Sex == "female",]
+
+totrain.female_median <- median(totrain.females$Age,na.rm = TRUE)
+
+totrain[is.na(totrain$Age)&totrain$Sex == 'female',
+             "Age"] <- totrain.female_median
+
+```
+
+The same I did here.
+
+```{r}
+totest[totest$Embarked == "","Embarked"] <- "S"
+
+totest.males <- totest[totest$Sex == "male",]
+
+totest.male_median <- median(totest.males$Age,na.rm = TRUE)
+
+totest[is.na(totest$Age)&totest$Sex == 'male',
+             "Age"] <- totest.male_median
+
+totest.females <- totest[totest$Sex == "female",]
+
+totest.female_median <- median(totest.females$Age,na.rm = TRUE)
+
+totest[is.na(totest$Age)&totest$Sex == 'female',
+             "Age"] <- totest.female_median
+
+```
+
+Changing data types for convenient usage.
+
+```{r}
+totrain$Sex <- as.factor(totrain$Sex)
+totrain$Embarked <- as.factor(totrain$Embarked)
+totrain$Name <- as.character(totrain$Name)
+totrain$Ticket <- as.character(totrain$Ticket)
+
+totest$Sex <- as.factor(totest$Sex)
+totest$Embarked <- as.factor(totest$Embarked)
+totest$Name <- as.character(totest$Name)
+totest$Ticket <- as.character(totest$Ticket)
+```
+
+I am going to delete column Cabin because there we have really a few values in columns and it is absolutely useless.
+
+```{r}
+totrain <- select(totrain, -c(Cabin))
+totest <- select(totest, -c(Cabin))
+```
+
+And now let's do some visualization. Here is a plot of the number of people who survived and did not survive.
+
+```{r}
+
+g <- ggplot(data=totrain, aes(x=Survived,fill=Survived)) + geom_bar()+
+  theme_grey(base_size = 15)
+g
+```
+
+Have a look at the importance of gender. Apparently the men were quite noble and let the women forward.
+
+```{r}
+g <- ggplot(data=totrain, aes(x=Survived,fill=Sex)) + geom_bar()+
+  theme_grey(base_size = 15)
+g
+```
+
+And here you can see a meaningful picture. Most people died from the third class. This can be explained by the fact that third-class cabins were situated at the bottom of the ship and when the ship struck and the water began to pour into the lower tiers, people from there had practically no chance to escape.
+```{r}
+class <- table(totrain$Pclass, totrain$Survived)
+barplot(class, beside=FALSE, col=c("#F48A38", "#FADD23", "#A0E322"), legend.text=TRUE, xlab="Survived", ylab="count",
+        main="Survived by classes")
+```
+
+Also on board were mostly quite young people - about 20-35 years old.
+```{r}
+hist(totrain$Age, breaks=50, col = c("#C7A5FF"))
+```
+
+As for the number of siblings and spouses, it seems that lonely people had great chances of survival, although even more lonely people died.
+
+```{r}
+sibsp <- table(totrain$SibSp, totrain$Survived)
+barplot(sibsp, beside=FALSE, col=brewer.pal(n = 8, name = "PuRd"), legend.text=TRUE, xlab="Survived", ylab="count",
+        main="Survived by number of siblings / spouses aboard the Titanic")
+```
+
+Almost the same picture we see here, where the number of parents and children of the passenger was calculated.
+
+```{r}
+parch <- table(totrain$Parch, totrain$Survived)
+barplot(parch, beside=FALSE, col=brewer.pal(n = 8, name = "PuRd"), legend.text=TRUE, xlab="Survived", ylab="count",
+        main="Survived by number of parents / children aboard the Titanic")
+```
+
+That's the histogram of fare. It describes how much people spent during the trip.
+
+```{r}
+hist(totrain$Fare, breaks=50, col=c("#2BB818"), main="Histogram of fare", xlab="Fare")
+```
+
+More data cleaning...
+
+```{r}
+colnames(totrain)[which(names(totrain) == "Sex")] <- "Female"
+totrain$Female <- ifelse(totrain$Female == "female", 1, 0)
+
+colnames(totest)[which(names(totest) == "Sex")] <- "Female"
+totest$Female <- ifelse(totest$Female == "female", 1, 0)
+```
+
+I found that there are some missed values in fare column. So I built a decision tree to determine the missing fare.
+
+```{r}
+
+
+fare_dt <- rpart(Fare ~ Pclass + Parch + Female + SibSp,
+                 data=totest)
+
+rpart.plot(fare_dt, type=1, extra=101)
+```
+
+```{r}
+MissingFare <- totest[is.na(totest$Fare),]
+MissingFare
+
+```
+
+The value was determined by different factors which described a person.
+```{r}
+totest[is.na(totest$Fare),"Fare"] <- 15
+```
+
+Here I am creating dummy variables to find out later whether was it important to embark at some specific port.
+
+```{r}
+totrain <- dummy.data.frame(totrain, names = c("Embarked") , sep = ".") 
+totest <- dummy.data.frame(totest, names = c("Embarked") , sep = ".") 
+```
+
+
+Here I delete variables which is not important for future training and prediction.
+```{r}
+totrain <- select(totrain, -c(Name, Ticket))
+totest <- select(totest, -c(Name, Ticket))
+
+```
+
+I am using the logit prediction model because at the end I need 1 or 0 - will person survive or not.
+```{r}
+mylogit <- glm(Survived ~ Pclass + Female + Age + SibSp + Parch + Fare + Embarked.C + Embarked.S, data = totrain, family = "binomial")
+
+```
+
+Here I got that the estimates of every factor. So if you were old man in third class with siblings or/and spouse you had the highest probability to die. But if you were young, rich and lonely woman you had all chances to rescue. There are more factors but p-value show us that there are not so important. It was not important did person have a children, or spend money on Titanic, or embarked at some specific port. Still I need to check if it is so later.
+```{r}
+summary(mylogit)
+```
+
+Now I am 
+```{r}
+splitting <- createDataPartition(y=totrain$Survived, p=0.6, list=FALSE)
+training <- totrain[ splitting, ]
+testing <- totrain[ -splitting, ]
+training
+```
+
+```{r}
+mod_fit <- train(as.factor(Survived) ~ Pclass + Female + Age + SibSp + Parch + Fare + Embarked.C + Embarked.S, data = training, method="glm", family="binomial", na.action=na.exclude)
+```
+
+```{r}
+summary(mod_fit)
+```
+
+```{r}
+exp(coef(mod_fit$finalModel))
+```
+
+```{r}
+p <- predict(mod_fit, newdata=testing)
+```
+
+
+```{r}
+mod_fit_one <- glm(Survived ~ Pclass + Female + Age + SibSp + Parch + Fare + Embarked.C + Embarked.S, data=training, family="binomial")
+mod_fit_two <- glm(Survived ~ Pclass + Female + Age, data=training, family="binomial")
+anova(mod_fit_one, mod_fit_two, test ="Chisq")
+```
+
+```{r}
+varImp(mod_fit)
+```
+
+
+```{r}
+pred = predict(mod_fit, newdata=testing)
+pred
+
+confusionMatrix(table(data=pred, testing$Survived))
+```
+
+```{r}
+
+training
+training$Survived <- as.character(training$Survived)
+training$Survived <- as.factor(training$Survived)
+forest <- randomForest(Survived ~ Pclass + Female + Age + SibSp + Parch + Fare + Embarked.C + Embarked.S,
+             data=training,
+             ntree = 500,
+             nodesize = 25
+             )
+```
+
+
+```{r}
+Survived <- predict(mod_fit, newdata=totest)
+```
+
+```{r}
+ForestSurvived <- predict(forest, newdata=totest)
+```
+
+```{r}
+PassengerId <- totest$PassengerId
+output.df <- as.data.frame(PassengerId)
+
+
+output.df$Survived <- ForestSurvived
+
+write.csv(output.df,"titanic_kaggle_submission_2.csv", row.names = FALSE)
+```
+
+
