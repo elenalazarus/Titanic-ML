@@ -264,7 +264,11 @@ Survived <- predict(mod_fit, newdata=totest)
 ```
 
 ```{r}
+ForestSurvived <- predict(forest, newdata=testing)
+confusionMatrix(table(data=ForestSurvived, testing$Survived))
+
 ForestSurvived <- predict(forest, newdata=totest)
+
 ```
 
 Preparing results for Kaggle
