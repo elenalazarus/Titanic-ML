@@ -202,6 +202,18 @@ Here I got that the estimates of every factor. So if you were old man in third c
 summary(mylogit)
 ```
 
+```{r}
+varImp(mylogit)
+```
+
+Comparing two models
+```{r}
+mod_fit_one <- glm(Survived ~ Pclass + Female + Age + SibSp + Parch + Fare + Embarked.C + Embarked.S, data=totrain, family="binomial")
+mod_fit_two <- glm(Survived ~ Pclass + Female + Age + SibSp, data=totrain, family="binomial")
+anova(mod_fit_one, mod_fit_two, test ="Chisq")
+```
+
+
 Now I am doing partition of data to build a model based on first part of train data set and then fit it and define its accuracy by testing at the second part of train data set.
 ```{r}
 splitting <- createDataPartition(y=totrain$Survived, p=0.6, list=FALSE)
@@ -210,9 +222,11 @@ testing <- totrain[ -splitting, ]
 training
 ```
 
+Training model
 ```{r}
-mod_fit <- train(as.factor(Survived) ~ Pclass + Female + Age + SibSp + Parch + Fare + Embarked.C + Embarked.S, data = training, method="glm", family="binomial", na.action=na.exclude)
+mod_fit <- train(as.factor(Survived) ~ Pclass + Female + Age + SibSp, data = training, method="glm", family="binomial", na.action=na.exclude)
 ```
+
 
 ```{r}
 summary(mod_fit)
@@ -227,16 +241,6 @@ exp(coef(mod_fit$finalModel))
 p <- predict(mod_fit, newdata=testing)
 ```
 
-Comparing two models
-```{r}
-mod_fit_one <- glm(Survived ~ Pclass + Female + Age + SibSp + Parch + Fare + Embarked.C + Embarked.S, data=training, family="binomial")
-mod_fit_two <- glm(Survived ~ Pclass + Female + Age, data=training, family="binomial")
-anova(mod_fit_one, mod_fit_two, test ="Chisq")
-```
-
-```{r}
-varImp(mod_fit)
-```
 
 Prediction at the second part of training data set, checking the accuracy
 ```{r}
@@ -251,7 +255,7 @@ Building random forest
 training
 training$Survived <- as.character(training$Survived)
 training$Survived <- as.factor(training$Survived)
-forest <- randomForest(Survived ~ Pclass + Female + Age + SibSp + Parch + Fare + Embarked.C + Embarked.S,
+forest <- randomForest(Survived ~ Pclass + Female + Age,
              data=training,
              ntree = 500,
              nodesize = 25
@@ -282,4 +286,4 @@ output.df$Survived <- ForestSurvived
 write.csv(output.df,"titanic_kaggle_submission_2.csv", row.names = FALSE)
 ```
 
-
+In conclusion I can tell that more chances to survive had women, young, rich and lonely people.
