@@ -232,11 +232,6 @@ mod_fit <- train(as.factor(Survived) ~ Pclass + Female + Age + SibSp, data = tra
 summary(mod_fit)
 ```
 
-Trying different methods for variable selection
-```{r}
-exp(coef(mod_fit$finalModel))
-```
-
 ```{r}
 p <- predict(mod_fit, newdata=testing)
 ```
@@ -255,7 +250,7 @@ Building random forest
 training
 training$Survived <- as.character(training$Survived)
 training$Survived <- as.factor(training$Survived)
-forest <- randomForest(Survived ~ Pclass + Female + Age,
+forest <- randomForest(Survived ~ Pclass + Female + Age + SibSp,
              data=training,
              ntree = 500,
              nodesize = 25
